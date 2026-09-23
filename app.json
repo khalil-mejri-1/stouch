@@ -17,7 +17,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.kmejri.stouch",
-      "versionCode": 3
+      "versionCode": 4
     },
     "web": {
       "output": "static",
