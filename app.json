@@ -1,0 +1,71 @@
+{
+  "expo": {
+    "name": "stouch",
+    "slug": "stouch",
+    "version": "1.0.2",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "stouch",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0039C6",
+        "foregroundImage": "./assets/images/android-icon-foreground.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.kmejri.stouch",
+      "versionCode": 3
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/icon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/logo.png",
+          "imageWidth": 280,
+          "resizeMode": "contain",
+          "backgroundColor": "#FFFFFF",
+          "dark": {
+            "backgroundColor": "#FFFFFF"
+          }
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow STOUCH to access your microphone for voice transaction entry."
+        }
+      ],
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/Outfit_400Regular.ttf",
+            "./assets/fonts/Outfit_500Medium.ttf",
+            "./assets/fonts/Outfit_600SemiBold.ttf",
+            "./assets/fonts/Outfit_700Bold.ttf",
+            "./assets/fonts/Outfit_800ExtraBold.ttf",
+            "./assets/fonts/Outfit_900Black.ttf"
+          ]
+        }
+      ],
+      "expo-asset"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "a671bde1-3f70-480d-8425-3f39bab860c2"
+      }
+    }
+  }
+}
