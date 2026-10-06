@@ -51,6 +51,7 @@ export default function AddTransactionScreen() {
   const [txTitleInput, setTxTitleInput] = useState('');
   const [txAmountInput, setTxAmountInput] = useState('');
   const [txTypeSelect, setTxTypeSelect] = useState<'income' | 'expense'>('expense');
+  const [txStatusSelect, setTxStatusSelect] = useState<'received' | 'pending'>('received');
   const [txCategorySelect, setTxCategorySelect] = useState('food');
 
   const handleTypeSelect = (type: 'income' | 'expense') => {
@@ -60,6 +61,10 @@ export default function AddTransactionScreen() {
       // safe fallback
     }
     setTxTypeSelect(type);
+    if (type === 'income') {
+      // Default to received when switching to income
+      setTxStatusSelect('received');
+    }
   };
 
   const handleSave = () => {
@@ -72,7 +77,14 @@ export default function AddTransactionScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {}
 
-    addTransaction(txTitleInput.trim(), txAmountInput.trim(), txTypeSelect, txCategorySelect);
+    addTransaction(
+      txTitleInput.trim(),
+      txAmountInput.trim(),
+      txTypeSelect,
+      txCategorySelect,
+      undefined,
+      txTypeSelect === 'income' ? txStatusSelect : undefined
+    );
     router.back();
   };
 
@@ -234,6 +246,136 @@ export default function AddTransactionScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
+
+            {/* Receipt Status Selector (Only when income is chosen) */}
+            {txTypeSelect === 'income' && (
+              <View style={styles.statusSectionContainer}>
+                <View style={[styles.statusHeaderRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                  <Text style={[styles.inputLabel, { color: colors.textPrimary, marginTop: 0, marginBottom: 0 }]}>
+                    {t('receiptStatus')}
+                  </Text>
+                  <Text style={[styles.statusSubtitleText, { color: colors.textSecondary }]}>
+                    {t('receiptStatusQuestion')}
+                  </Text>
+                </View>
+
+                <View style={[styles.statusSelectorRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                  {/* Option 1: Received (Default) */}
+                  <TouchableOpacity
+                    style={[
+                      styles.statusCard,
+                      {
+                        backgroundColor:
+                          txStatusSelect === 'received'
+                            ? (isDark ? 'rgba(16, 185, 129, 0.16)' : '#ECFDF5')
+                            : (isDark ? colors.surfaceSecondary : '#F8FAFC'),
+                        borderColor:
+                          txStatusSelect === 'received'
+                            ? (isDark ? '#10B981' : '#059669')
+                            : colors.border,
+                        borderWidth: txStatusSelect === 'received' ? 1.5 : 1,
+                      },
+                      { flexDirection: isRTL ? 'row-reverse' : 'row' },
+                    ]}
+                    onPress={() => {
+                      try { Haptics.selectionAsync(); } catch {}
+                      setTxStatusSelect('received');
+                    }}
+                    activeOpacity={0.75}
+                  >
+                    <MaterialIcons
+                      name="check-circle"
+                      size={18}
+                      color={
+                        txStatusSelect === 'received'
+                          ? (isDark ? '#34D399' : '#059669')
+                          : colors.textSecondary
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.statusCardText,
+                        {
+                          color:
+                            txStatusSelect === 'received'
+                              ? (isDark ? '#34D399' : '#059669')
+                              : colors.textSecondary,
+                          fontWeight: txStatusSelect === 'received' ? '700' : '600',
+                        },
+                      ]}
+                    >
+                      {t('receivedStatus')}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* Option 2: Pending (Yellow Card Style) */}
+                  <TouchableOpacity
+                    style={[
+                      styles.statusCard,
+                      {
+                        backgroundColor:
+                          txStatusSelect === 'pending'
+                            ? (isDark ? 'rgba(245, 158, 11, 0.18)' : '#FEF9C3')
+                            : (isDark ? colors.surfaceSecondary : '#F8FAFC'),
+                        borderColor:
+                          txStatusSelect === 'pending'
+                            ? (isDark ? '#F59E0B' : '#EAB308')
+                            : colors.border,
+                        borderWidth: txStatusSelect === 'pending' ? 1.5 : 1,
+                      },
+                      { flexDirection: isRTL ? 'row-reverse' : 'row' },
+                    ]}
+                    onPress={() => {
+                      try { Haptics.selectionAsync(); } catch {}
+                      setTxStatusSelect('pending');
+                    }}
+                    activeOpacity={0.75}
+                  >
+                    <MaterialIcons
+                      name="hourglass-empty"
+                      size={18}
+                      color={
+                        txStatusSelect === 'pending'
+                          ? (isDark ? '#FBBF24' : '#D97706')
+                          : colors.textSecondary
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.statusCardText,
+                        {
+                          color:
+                            txStatusSelect === 'pending'
+                              ? (isDark ? '#FBBF24' : '#B45309')
+                              : colors.textSecondary,
+                          fontWeight: txStatusSelect === 'pending' ? '700' : '600',
+                        },
+                      ]}
+                    >
+                      {t('pendingStatus')}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {txStatusSelect === 'pending' && (
+                  <View
+                    style={[
+                      styles.pendingHintBanner,
+                      {
+                        flexDirection: isRTL ? 'row-reverse' : 'row',
+                        backgroundColor: isDark ? 'rgba(245, 158, 11, 0.12)' : '#FFFBEB',
+                        borderColor: isDark ? 'rgba(245, 158, 11, 0.3)' : '#FDE68A',
+                      },
+                    ]}
+                  >
+                    <MaterialIcons name="wb-sunny" size={15} color={isDark ? '#FBBF24' : '#D97706'} />
+                    <Text style={[styles.pendingHintBannerText, { color: isDark ? '#FDE68A' : '#92400E' }]}>
+                      {t('pendingHint')}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
 
             <Text style={[styles.inputLabel, { color: colors.textPrimary }, !isRTL && { textAlign: 'left' }]}>
               {t('txCategoryLabel')}
@@ -450,5 +592,46 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  statusSectionContainer: {
+    marginTop: 14,
+    marginBottom: 4,
+    gap: 8,
+  },
+  statusHeaderRow: {
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  statusSubtitleText: {
+    fontSize: 12,
+  },
+  statusSelectorRow: {
+    gap: 10,
+  },
+  statusCard: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    gap: 7,
+  },
+  statusCardText: {
+    fontSize: 13,
+  },
+  pendingHintBanner: {
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginTop: 4,
+  },
+  pendingHintBannerText: {
+    fontSize: 12,
+    fontWeight: '600',
+    flexShrink: 1,
   },
 });

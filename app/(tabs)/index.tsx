@@ -31,6 +31,7 @@ import { CustomFilterModal, CustomFilterItem } from '../../components/CustomFilt
 import { DeleteTransactionModal } from '../../components/DeleteTransactionModal';
 import { AnimatedTransactionCard } from '../../components/AnimatedTransactionCard';
 import { CalculationModal } from '../../components/CalculationModal';
+import { EditTransactionModal } from '../../components/EditTransactionModal';
 
 const { width } = Dimensions.get('window');
 
@@ -50,7 +51,12 @@ export default function HomeScreen() {
   const {
     transactions,
     getBalance,
+    getPendingIncomeTotal,
+    toggleTransactionStatus,
+    updateTransaction,
     deleteTransaction,
+    deleteMultipleTransactions,
+    updateMultipleTransactionsStatus,
     addPreset,
     updatePreset,
     deletePreset,
@@ -58,6 +64,8 @@ export default function HomeScreen() {
     lastAddedTx,
     clearLastAddedTx,
   } = useTransactions();
+
+  const [txToEdit, setTxToEdit] = useState<Transaction | null>(null);
 
   const scrollViewRef = useRef<ScrollView>(null);
 
@@ -166,7 +174,6 @@ export default function HomeScreen() {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     deleteTransaction(id);
     setDeletingTxId(null);
-    showDeleteSuccessToast();
   };
 
   // Load custom filters and hidden category filters from storage on mount
@@ -367,6 +374,44 @@ export default function HomeScreen() {
     setCalcModalVisible(true);
   };
 
+  // Start multi-select mode directly from long-pressing a card for 1 continuous second
+  const handleStartSelectModeWithTx = (tx: Transaction) => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    } catch {}
+    setIsSelectMode(true);
+    setSelectedTxIds([tx.id]);
+  };
+
+  // Change status of selected transactions to pending (waiting / yellow card)
+  const handleSetSelectedToPending = () => {
+    if (selectedTxIds.length === 0) return;
+    try {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {}
+    updateMultipleTransactionsStatus(selectedTxIds, 'pending');
+  };
+
+  // Change status of selected transactions to received
+  const handleSetSelectedToReceived = () => {
+    if (selectedTxIds.length === 0) return;
+    try {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {}
+    updateMultipleTransactionsStatus(selectedTxIds, 'received');
+  };
+
+  // Delete all selected transactions directly without notification/alert popup
+  const handleDeleteSelected = () => {
+    if (selectedTxIds.length === 0) return;
+    try {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {}
+    deleteMultipleTransactions(selectedTxIds);
+    setSelectedTxIds([]);
+    setIsSelectMode(false);
+  };
+
   // Calculate filtered transactions (Feature 2)
   const handleCalculateFiltered = () => {
     if (filteredTransactions.length === 0) {
@@ -468,6 +513,8 @@ export default function HomeScreen() {
   // Format balance helper
   const balance = getBalance();
   const balanceFormatted = balance.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
+  const pendingIncomeTotal = getPendingIncomeTotal();
+  const pendingIncomeFormatted = pendingIncomeTotal.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
 
   // Dynamic VIP Wallet Card Palette:
   // Dark Mode: Royal Obsidian & 24K Liquid Gold
@@ -479,9 +526,10 @@ export default function HomeScreen() {
   // Filtered transactions helper based on search query & ready/custom filter buttons
   const filteredTransactions = transactions.filter((tx) => {
     // 1. Ready button or Custom filter
+    if (activeFilter === 'pending' && (tx.type !== 'income' || tx.status !== 'pending')) return false;
     if (activeFilter === 'income' && tx.type !== 'income') return false;
     if (activeFilter === 'expense' && tx.type !== 'expense') return false;
-    if (activeFilter !== 'all' && activeFilter !== 'income' && activeFilter !== 'expense') {
+    if (activeFilter !== 'all' && activeFilter !== 'income' && activeFilter !== 'expense' && activeFilter !== 'pending') {
       const custom = customFilters.find((f) => f.id === activeFilter);
       if (custom) {
         if (custom.type === 'expense' && tx.type !== 'expense') return false;
@@ -702,6 +750,24 @@ export default function HomeScreen() {
                     </>
                   )}
                 </View>
+
+                {/* Pending Income Indicator on Balance Card */}
+                {pendingIncomeTotal > 0 && (
+                  <TouchableOpacity
+                    style={[
+                      styles.pendingBalanceChip,
+                      { flexDirection: isRTL ? 'row-reverse' : 'row' },
+                      !isRTL && { alignSelf: 'flex-start' },
+                    ]}
+                    onPress={() => setActiveFilter(activeFilter === 'pending' ? 'all' : 'pending')}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialIcons name="hourglass-empty" size={11} color="#FBBF24" />
+                    <Text style={styles.pendingBalanceChipText}>
+                      {t('pendingIncomesBadge', 'معلقة')}: +{pendingIncomeFormatted} {currency}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
           </LinearGradient>
@@ -1063,6 +1129,34 @@ export default function HomeScreen() {
                   </TouchableOpacity>
                 )}
 
+                {/* Ready Button: Pending Incomes (معلقة بالأصفر) */}
+                <TouchableOpacity
+                  style={[
+                    styles.filterChip,
+                    { backgroundColor: colors.surface, borderColor: colors.border },
+                    activeFilter === 'pending' && {
+                      backgroundColor: isDark ? 'rgba(245, 158, 11, 0.25)' : '#FEF9C3',
+                      borderColor: isDark ? '#F59E0B' : '#D97706',
+                    },
+                  ]}
+                  onPress={() => setActiveFilter(activeFilter === 'pending' ? 'all' : 'pending')}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.filterChipDot, { backgroundColor: isDark ? '#FBBF24' : '#D97706' }]} />
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      { color: colors.textSecondary },
+                      activeFilter === 'pending' && {
+                        color: isDark ? '#FBBF24' : '#B45309',
+                        fontWeight: '700',
+                      },
+                    ]}
+                  >
+                    ⏳ {t('pendingIncomesBadge', 'معلقة')}
+                  </Text>
+                </TouchableOpacity>
+
                 {/* Ready Category Filter Buttons */}
                 {['طعام', 'نقل', 'تسوق', 'فواتير', 'عمل', 'ترفيه', 'أخرى']
                   .filter((cat) => !hiddenFilters.includes(cat))
@@ -1210,6 +1304,14 @@ export default function HomeScreen() {
                     isSelectMode={isSelectMode}
                     isSelected={selectedTxIds.includes(tx.id)}
                     onToggleSelect={toggleSelectTx}
+                    onLongPressCard={handleStartSelectModeWithTx}
+                    onEditPress={(targetTx) => setTxToEdit(targetTx)}
+                    onToggleStatus={(targetTx) => {
+                      try {
+                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                      } catch {}
+                      toggleTransactionStatus(targetTx.id);
+                    }}
                   />
                 ))
               )}
@@ -1218,7 +1320,7 @@ export default function HomeScreen() {
         </ScrollView>
       </SafeAreaView>
 
-      {/* Floating Selection & Calculation Action Bar */}
+      {/* Floating Selection & Actions Multi-Bar */}
       {isSelectMode && (
         <View style={styles.floatingSelectBarContainer}>
           <View
@@ -1226,39 +1328,57 @@ export default function HomeScreen() {
               styles.floatingSelectBar,
               {
                 backgroundColor: isDark ? '#111827' : '#FFFFFF',
-                borderColor: isDark ? 'rgba(255, 255, 255, 0.14)' : '#E2E8F0',
+                borderColor: isDark ? 'rgba(255, 255, 255, 0.16)' : '#E2E8F0',
               },
-              !isRTL && { flexDirection: 'row-reverse' },
             ]}
           >
-            {/* Close Selection Mode Button */}
-            <TouchableOpacity
-              onPress={handleToggleSelectMode}
+            {/* Header / Info Row */}
+            <View
               style={[
-                styles.selectCloseBtn,
-                {
-                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#F1F5F9',
-                },
+                styles.floatingSelectTopRow,
+                { flexDirection: isRTL ? 'row-reverse' : 'row' },
               ]}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <MaterialIcons name="close" size={17} color={isDark ? '#E2E8F0' : '#475569'} />
-            </TouchableOpacity>
+              <View style={[styles.selectInfoGroup, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                {/* Close Selection Mode Button */}
+                <TouchableOpacity
+                  onPress={handleToggleSelectMode}
+                  style={[
+                    styles.selectCloseBtn,
+                    {
+                      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#F1F5F9',
+                    },
+                  ]}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <MaterialIcons name="close" size={17} color={isDark ? '#E2E8F0' : '#475569'} />
+                </TouchableOpacity>
 
-            {/* Selection Count and Select/Deselect All Toggle */}
-            <View style={[styles.selectInfoCol, !isRTL && { alignItems: 'flex-start' }]}>
-              <Text style={[styles.selectCountText, { color: colors.textPrimary }]}>
-                {selectedTxIds.length} {t('selectedItems', 'محددة')}
-              </Text>
+                <View
+                  style={[
+                    styles.selectCounterBadge,
+                    {
+                      backgroundColor: isDark ? 'rgba(56, 189, 248, 0.15)' : 'rgba(2, 132, 199, 0.1)',
+                    },
+                  ]}
+                >
+                  <Text style={[styles.selectCountText, { color: isDark ? '#38BDF8' : '#0284C7' }]}>
+                    {selectedTxIds.length} {t('selectedItems', 'محددة')}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Select All / Deselect All Toggle */}
               <TouchableOpacity
                 onPress={
                   selectedTxIds.length === filteredTransactions.length && filteredTransactions.length > 0
                     ? deselectAllTransactions
                     : selectAllTransactions
                 }
-                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={styles.selectAllBtn}
               >
-                <Text style={[styles.selectAllLink, { color: isDark ? '#38BDF8' : '#0284C7' }]}>
+                <Text style={[styles.selectAllLink, { color: isDark ? '#94A3B8' : '#64748B' }]}>
                   {selectedTxIds.length === filteredTransactions.length && filteredTransactions.length > 0
                     ? t('deselectAll', 'إلغاء التحديد')
                     : t('selectAll', 'تحديد الكل')}
@@ -1266,42 +1386,129 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Big Action Button: CALCUL */}
-            <TouchableOpacity
+            {/* Quick Action Buttons Row: Calculate | Pending | Received | Delete */}
+            <View
               style={[
-                styles.calcActionBtn,
-                {
-                  backgroundColor: selectedTxIds.length > 0
-                    ? (isDark ? '#38BDF8' : '#0F172A')
-                    : (isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0'),
-                },
+                styles.floatingActionsRow,
+                { flexDirection: isRTL ? 'row-reverse' : 'row' },
               ]}
-              onPress={handleCalculateSelected}
-              disabled={selectedTxIds.length === 0}
-              activeOpacity={0.8}
             >
-              <MaterialIcons
-                name="calculate"
-                size={18}
-                color={
-                  selectedTxIds.length > 0
-                    ? (isDark ? '#080C15' : '#FFFFFF')
-                    : (isDark ? '#64748B' : '#94A3B8')
-                }
-              />
-              <Text
+              {/* 1. CALCUL (حساب المجموع) */}
+              <TouchableOpacity
                 style={[
-                  styles.calcActionBtnText,
+                  styles.multiActionBtn,
                   {
-                    color: selectedTxIds.length > 0
-                      ? (isDark ? '#080C15' : '#FFFFFF')
-                      : (isDark ? '#64748B' : '#94A3B8'),
+                    backgroundColor: isDark ? 'rgba(168, 85, 247, 0.18)' : '#FAF5FF',
+                    borderColor: isDark ? 'rgba(192, 132, 252, 0.45)' : '#DDD6FE',
+                    opacity: selectedTxIds.length > 0 ? 1 : 0.45,
                   },
                 ]}
+                onPress={handleCalculateSelected}
+                disabled={selectedTxIds.length === 0}
+                activeOpacity={0.75}
               >
-                {t('calculate', 'CALCUL')}
-              </Text>
-            </TouchableOpacity>
+                <MaterialIcons name="calculate" size={18} color={isDark ? '#C084FC' : '#7C3AED'} />
+                <Text
+                  style={[
+                    styles.multiActionBtnText,
+                    { color: isDark ? '#C084FC' : '#7C3AED' },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {t('calculate', 'CALCUL')}
+                </Text>
+              </TouchableOpacity>
+
+              {/* 2. الانتظار (Set Status to Pending / Yellow) */}
+              <TouchableOpacity
+                style={[
+                  styles.multiActionBtn,
+                  {
+                    backgroundColor: isDark ? 'rgba(245, 158, 11, 0.2)' : '#FEF9C3',
+                    borderColor: isDark ? 'rgba(245, 158, 11, 0.5)' : '#FCD34D',
+                    opacity: selectedTxIds.length > 0 ? 1 : 0.45,
+                  },
+                ]}
+                onPress={handleSetSelectedToPending}
+                disabled={selectedTxIds.length === 0}
+                activeOpacity={0.75}
+              >
+                <MaterialIcons
+                  name="hourglass-empty"
+                  size={17}
+                  color={isDark ? '#FBBF24' : '#B45309'}
+                />
+                <Text
+                  style={[
+                    styles.multiActionBtnText,
+                    { color: isDark ? '#FBBF24' : '#B45309' },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {t('pendingActionText', 'انتظار')}
+                </Text>
+              </TouchableOpacity>
+
+              {/* 3. استلام (Set Status to Received) */}
+              <TouchableOpacity
+                style={[
+                  styles.multiActionBtn,
+                  {
+                    backgroundColor: isDark ? 'rgba(16, 185, 129, 0.18)' : '#ECFDF5',
+                    borderColor: isDark ? 'rgba(52, 211, 153, 0.45)' : '#A7F3D0',
+                    opacity: selectedTxIds.length > 0 ? 1 : 0.45,
+                  },
+                ]}
+                onPress={handleSetSelectedToReceived}
+                disabled={selectedTxIds.length === 0}
+                activeOpacity={0.75}
+              >
+                <MaterialIcons
+                  name="check-circle"
+                  size={17}
+                  color={isDark ? '#34D399' : '#059669'}
+                />
+                <Text
+                  style={[
+                    styles.multiActionBtnText,
+                    { color: isDark ? '#34D399' : '#059669' },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {t('receivedActionText', 'استلام')}
+                </Text>
+              </TouchableOpacity>
+
+              {/* 4. حذف (Bulk Delete) */}
+              <TouchableOpacity
+                style={[
+                  styles.multiActionBtn,
+                  {
+                    backgroundColor: isDark ? 'rgba(239, 68, 68, 0.18)' : '#FEF2F2',
+                    borderColor: isDark ? 'rgba(248, 113, 113, 0.45)' : '#FECACA',
+                    opacity: selectedTxIds.length > 0 ? 1 : 0.45,
+                  },
+                ]}
+                onPress={handleDeleteSelected}
+                disabled={selectedTxIds.length === 0}
+                activeOpacity={0.75}
+              >
+                <MaterialIcons
+                  name="delete-outline"
+                  size={18}
+                  color={isDark ? '#F87171' : '#DC2626'}
+                />
+                <Text
+                  style={[
+                    styles.multiActionBtnText,
+                    { color: isDark ? '#F87171' : '#DC2626' },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {t('delete', 'حذف')}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       )}
@@ -1400,6 +1607,21 @@ export default function HomeScreen() {
         transaction={txToDelete}
         onClose={() => setTxToDelete(null)}
         onConfirm={handleConfirmDelete}
+      />
+
+      {/* Edit Transaction Modal */}
+      <EditTransactionModal
+        visible={!!txToEdit}
+        transaction={txToEdit}
+        onClose={() => setTxToEdit(null)}
+        onSave={(id, updatedData) => {
+          updateTransaction(id, updatedData);
+          setTxToEdit(null);
+        }}
+        onDelete={(tx) => {
+          setTxToEdit(null);
+          handleRequestDelete(tx);
+        }}
       />
 
       {/* Financial Calculation Breakdown Modal */}
@@ -1605,6 +1827,24 @@ const styles = StyleSheet.create({
     fontSize: 34,
     color: '#FFFFFF',
     letterSpacing: -0.5,
+  },
+  pendingBalanceChip: {
+    marginTop: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    backgroundColor: 'rgba(245, 158, 11, 0.18)',
+    borderColor: 'rgba(245, 158, 11, 0.40)',
+    borderWidth: 1,
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+  },
+  pendingBalanceChipText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#FBBF24',
+    fontFamily: 'Outfit-Bold',
   },
   cardBrandWrap: {
     alignItems: 'flex-start',
@@ -2026,59 +2266,79 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     zIndex: 999,
   },
   floatingSelectBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 22,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     paddingVertical: 10,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     width: '100%',
-    maxWidth: 360,
+    maxWidth: 390,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 8,
-    gap: 12,
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
+    elevation: 10,
+    gap: 10,
   },
-  selectCloseBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  selectInfoCol: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  selectCountText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  selectAllLink: {
-    fontSize: 11.5,
-    fontWeight: '600',
-    marginTop: 1,
-  },
-  calcActionBtn: {
+  floatingSelectTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 14,
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
   },
-  calcActionBtnText: {
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+  selectInfoGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  selectCloseBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectCounterBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  selectCountText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
+  selectAllBtn: {
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
+  selectAllLink: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  floatingActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+  multiActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 9,
+    paddingHorizontal: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  multiActionBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
   },
 });

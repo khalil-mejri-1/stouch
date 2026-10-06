@@ -10,7 +10,7 @@ interface AnimatedTransactionCardProps {
   isRTL: boolean;
   isDark: boolean;
   colors: any;
-  t: (key: string) => string;
+  t: (key: string, defaultText?: string) => string;
   onDeletePress: (tx: Transaction) => void;
   isDeleting: boolean;
   onDeleteAnimationComplete: (id: string) => void;
@@ -19,6 +19,9 @@ interface AnimatedTransactionCardProps {
   isSelectMode?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (tx: Transaction) => void;
+  onEditPress?: (tx: Transaction) => void;
+  onToggleStatus?: (tx: Transaction) => void;
+  onLongPressCard?: (tx: Transaction) => void;
 }
 
 export const AnimatedTransactionCard: React.FC<AnimatedTransactionCardProps> = ({
@@ -35,6 +38,9 @@ export const AnimatedTransactionCard: React.FC<AnimatedTransactionCardProps> = (
   isSelectMode = false,
   isSelected = false,
   onToggleSelect,
+  onEditPress,
+  onToggleStatus,
+  onLongPressCard,
 }) => {
   const translateXAnim = useRef(new Animated.Value(0)).current;
   const translateYAnim = useRef(new Animated.Value(isNew ? -24 : 0)).current;
@@ -112,16 +118,35 @@ export const AnimatedTransactionCard: React.FC<AnimatedTransactionCardProps> = (
   }, [isDeleting]);
 
   const isIncome = tx.type === 'income';
+  const isPending = isIncome && tx.status === 'pending';
 
   // Determine category/type accent color for the sleek edge stripe & glowing dot
-  const accentColor = isIncome
-    ? (isDark ? '#34D399' : '#059669')
-    : (isDark ? '#F87171' : '#DC2626');
+  const accentColor = isPending
+    ? (isDark ? '#FBBF24' : '#D97706')
+    : isIncome
+      ? (isDark ? '#34D399' : '#059669')
+      : (isDark ? '#F87171' : '#DC2626');
 
-  // Crisp, clear border color for the card
-  const baseBorderColor = isIncome
-    ? (isDark ? 'rgba(52, 211, 153, 0.35)' : '#86EFAC')
-    : (isDark ? 'rgba(248, 113, 113, 0.35)' : '#FECACA');
+  // Crisp, clear border color for the card (Yellow border for pending income!)
+  const baseBorderColor = isPending
+    ? (isDark ? 'rgba(245, 158, 11, 0.45)' : '#FCD34D')
+    : isIncome
+      ? (isDark ? 'rgba(52, 211, 153, 0.35)' : '#86EFAC')
+      : (isDark ? 'rgba(248, 113, 113, 0.35)' : '#FECACA');
+
+  const cardBgColor = isSelected
+    ? (isDark
+        ? (isPending ? 'rgba(245, 158, 11, 0.28)' : isIncome ? 'rgba(16, 185, 129, 0.22)' : 'rgba(239, 68, 68, 0.22)')
+        : (isPending ? '#FEF08A' : isIncome ? '#DCFCE7' : '#FEE2E2'))
+    : (isDark
+        ? (isPending ? 'rgba(245, 158, 11, 0.16)' : isIncome ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)')
+        : (isPending ? '#FEF9C3' : isIncome ? '#F0FDF4' : '#FEF2F2'));
+
+  const amountColor = isPending
+    ? (isDark ? '#FBBF24' : '#B45309')
+    : isIncome
+      ? (isDark ? '#34D399' : '#059669')
+      : (isDark ? '#F87171' : '#DC2626');
 
   return (
     <Animated.View
@@ -135,23 +160,35 @@ export const AnimatedTransactionCard: React.FC<AnimatedTransactionCardProps> = (
       }}
     >
       <TouchableOpacity
-        activeOpacity={isSelectMode ? 0.75 : 1}
-        onPress={isSelectMode ? () => {
+        activeOpacity={0.75}
+        delayLongPress={800}
+        onLongPress={() => {
+          try {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+          } catch {}
+          if (!isSelectMode) {
+            onLongPressCard?.(tx);
+          } else {
+            onToggleSelect?.(tx);
+          }
+        }}
+        onPress={() => {
           try {
             Haptics.selectionAsync();
           } catch {}
-          onToggleSelect?.(tx);
-        } : undefined}
-        disabled={!isSelectMode}
+          if (isSelectMode) {
+            onToggleSelect?.(tx);
+          } else {
+            onEditPress?.(tx);
+          }
+        }}
         style={{ width: '100%' }}
       >
         <Animated.View
           style={[
             styles.transactionCard,
             {
-              backgroundColor: isDark
-                ? (isIncome ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)')
-                : (isIncome ? '#F0FDF4' : '#FEF2F2'),
+              backgroundColor: cardBgColor,
               borderColor: isSelected
                 ? (isDark ? '#38BDF8' : '#0F172A')
                 : glowAnim.interpolate({
@@ -160,15 +197,18 @@ export const AnimatedTransactionCard: React.FC<AnimatedTransactionCardProps> = (
                   }),
               flexDirection: isRTL ? 'row-reverse' : 'row',
             },
+            isPending && {
+              borderWidth: 1.5,
+            },
             isSelected && {
               borderWidth: 2,
               backgroundColor: isDark
-                ? (isIncome ? 'rgba(16, 185, 129, 0.22)' : 'rgba(239, 68, 68, 0.22)')
-                : (isIncome ? '#DCFCE7' : '#FEE2E2'),
+                ? (isPending ? 'rgba(245, 158, 11, 0.28)' : isIncome ? 'rgba(16, 185, 129, 0.22)' : 'rgba(239, 68, 68, 0.22)')
+                : (isPending ? '#FEF08A' : isIncome ? '#DCFCE7' : '#FEE2E2'),
             },
             isRTL
-              ? { borderRightWidth: isSelected ? 3.5 : 3, borderRightColor: isSelected ? (isDark ? '#38BDF8' : '#0F172A') : accentColor }
-              : { borderLeftWidth: isSelected ? 3.5 : 3, borderLeftColor: isSelected ? (isDark ? '#38BDF8' : '#0F172A') : accentColor },
+              ? { borderRightWidth: isSelected ? 3.5 : (isPending ? 3.5 : 3), borderRightColor: isSelected ? (isDark ? '#38BDF8' : '#0F172A') : accentColor }
+              : { borderLeftWidth: isSelected ? 3.5 : (isPending ? 3.5 : 3), borderLeftColor: isSelected ? (isDark ? '#38BDF8' : '#0F172A') : accentColor },
           ]}
         >
           {/* Multi-Select Checkbox Circle */}
@@ -197,127 +237,214 @@ export const AnimatedTransactionCard: React.FC<AnimatedTransactionCardProps> = (
             </View>
           )}
 
-
-
-        {/* Main Information: Sleek minimal typography with glowing category dot (NO bulky icon box!) */}
-        <View
-          style={[
-            styles.txMainGroup,
-            isRTL
-              ? { marginRight: 4, alignItems: 'flex-end' }
-              : { marginLeft: 4, alignItems: 'flex-start' },
-          ]}
-        >
-          {/* Title Row with category glowing dot */}
+          {/* Main Information: Sleek minimal typography with glowing category dot */}
           <View
             style={[
-              styles.titleRow,
-              { flexDirection: isRTL ? 'row-reverse' : 'row' },
-            ]}
-          >
-            <Animated.View
-              style={[
-                styles.categoryDot,
-                {
-                  backgroundColor: accentColor,
-                  transform: [{ scale: dotScaleAnim }],
-                },
-                isRTL ? { marginLeft: 7 } : { marginRight: 7 },
-              ]}
-            />
-            <Text
-              style={[
-                styles.txTitle,
-                { color: colors.textPrimary },
-                isRTL && { textAlign: 'right' },
-              ]}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              {tx.title}
-            </Text>
-          </View>
-
-          {/* Formatted Transaction Date and Time */}
-          <Text
-            style={[
-              styles.txTime,
-              { color: colors.textSecondary },
+              styles.txMainGroup,
               isRTL
-                ? { paddingRight: 14, textAlign: 'right' }
-                : { paddingLeft: 14, textAlign: 'left' },
+                ? { marginRight: 4, alignItems: 'flex-end' }
+                : { marginLeft: 4, alignItems: 'flex-start' },
             ]}
           >
-            {formatTransactionTime(tx.time)}
-          </Text>
-        </View>
+            {/* Title Row with category glowing dot */}
+            <View
+              style={[
+                styles.titleRow,
+                { flexDirection: isRTL ? 'row-reverse' : 'row' },
+              ]}
+            >
+              <Animated.View
+                style={[
+                  styles.categoryDot,
+                  {
+                    backgroundColor: accentColor,
+                    transform: [{ scale: dotScaleAnim }],
+                  },
+                  isRTL ? { marginLeft: 7 } : { marginRight: 7 },
+                ]}
+              />
+              <Text
+                style={[
+                  styles.txTitle,
+                  { color: colors.textPrimary },
+                  isRTL && { textAlign: 'right' },
+                ]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {tx.title}
+              </Text>
+            </View>
 
-        {/* Price & Category Tag Column */}
-        <View
-          style={[
-            styles.txAmountCol,
-            { alignItems: isRTL ? 'flex-start' : 'flex-end' },
-            !isSelectMode && (isRTL ? { paddingLeft: 22 } : { paddingRight: 22 }),
-          ]}
-        >
-          <Text
-            style={[
-              styles.txAmount,
-              { color: isIncome ? (isDark ? '#34D399' : '#059669') : (isDark ? '#F87171' : '#DC2626') },
-            ]}
-          >
-            {formatTransactionAmount(tx, currency)}
-          </Text>
+            {/* Formatted Transaction Date and Time & Pending Note */}
+            <View style={[styles.timeRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+              <Text
+                style={[
+                  styles.txTime,
+                  { color: colors.textSecondary },
+                  isRTL
+                    ? { paddingRight: 14, textAlign: 'right' }
+                    : { paddingLeft: 14, textAlign: 'left' },
+                ]}
+              >
+                {formatTransactionTime(tx.time)}
+              </Text>
+            </View>
+          </View>
+
+          {/* Price & Category / Status Tag Column */}
           <View
             style={[
-              styles.tagContainer,
-              {
-                backgroundColor: isIncome
-                  ? (isDark ? 'rgba(16, 185, 129, 0.20)' : '#DCFCE7')
-                  : (isDark ? 'rgba(239, 68, 68, 0.20)' : '#FEE2E2'),
-                borderColor: isIncome
-                  ? (isDark ? 'rgba(52, 211, 153, 0.40)' : '#86EFAC')
-                  : (isDark ? 'rgba(248, 113, 113, 0.40)' : '#FCA5A5'),
-                alignSelf: isRTL ? 'flex-start' : 'flex-end',
-              },
+              styles.txAmountCol,
+              { alignItems: isRTL ? 'flex-start' : 'flex-end' },
+              !isSelectMode && (isRTL ? { paddingLeft: 52 } : { paddingRight: 52 }),
             ]}
           >
             <Text
               style={[
-                styles.tagText,
-                { color: isIncome ? (isDark ? '#34D399' : '#047857') : (isDark ? '#F87171' : '#B91C1C') },
+                styles.txAmount,
+                { color: amountColor },
               ]}
             >
-              {getCategoryLabel(tx.tag, t)}
+              {formatTransactionAmount(tx, currency)}
             </Text>
-          </View>
-        </View>
 
-        {/* Top Dedicated Delete Button (Visible & Non-intrusive) */}
-        {!isSelectMode && (
-          <TouchableOpacity
-            onPress={() => onDeletePress(tx)}
-            style={[
-              styles.deleteTxBtn,
-              {
-                backgroundColor: isDark ? 'rgba(239, 68, 68, 0.22)' : '#FEE2E2',
-                borderColor: isDark ? 'rgba(248, 113, 113, 0.40)' : '#FCA5A5',
-              },
-              isRTL ? { left: 8 } : { right: 8 },
-            ]}
-            activeOpacity={0.7}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <MaterialIcons
-              name="close"
-              size={13}
-              color={isDark ? '#F87171' : '#DC2626'}
-            />
-          </TouchableOpacity>
-        )}
-      </Animated.View>
-    </TouchableOpacity>
-  </Animated.View>
+            {/* Tag Badge: Yellow Pending badge if pending, or regular category badge */}
+            <View style={[styles.badgesRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+              {isPending && (
+                <View
+                  style={[
+                    styles.tagContainer,
+                    styles.pendingBadge,
+                    {
+                      backgroundColor: isDark ? 'rgba(245, 158, 11, 0.28)' : '#FEF08A',
+                      borderColor: isDark ? 'rgba(245, 158, 11, 0.50)' : '#FDE047',
+                      flexDirection: isRTL ? 'row-reverse' : 'row',
+                    },
+                  ]}
+                >
+                  <MaterialIcons name="hourglass-empty" size={10} color={isDark ? '#FBBF24' : '#92400E'} />
+                  <Text
+                    style={[
+                      styles.tagText,
+                      { color: isDark ? '#FDE68A' : '#78350F', marginHorizontal: 2 },
+                    ]}
+                  >
+                    {t('pendingIncomesBadge', 'معلقة')}
+                  </Text>
+                </View>
+              )}
+
+              <View
+                style={[
+                  styles.tagContainer,
+                  {
+                    backgroundColor: isPending
+                      ? (isDark ? 'rgba(245, 158, 11, 0.16)' : '#FFFBEB')
+                      : isIncome
+                        ? (isDark ? 'rgba(16, 185, 129, 0.20)' : '#DCFCE7')
+                        : (isDark ? 'rgba(239, 68, 68, 0.20)' : '#FEE2E2'),
+                    borderColor: isPending
+                      ? (isDark ? 'rgba(245, 158, 11, 0.35)' : '#FDE68A')
+                      : isIncome
+                        ? (isDark ? 'rgba(52, 211, 153, 0.40)' : '#86EFAC')
+                        : (isDark ? 'rgba(248, 113, 113, 0.40)' : '#FCA5A5'),
+                    alignSelf: isRTL ? 'flex-start' : 'flex-end',
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.tagText,
+                    {
+                      color: isPending
+                        ? (isDark ? '#FBBF24' : '#B45309')
+                        : isIncome
+                          ? (isDark ? '#34D399' : '#047857')
+                          : (isDark ? '#F87171' : '#B91C1C'),
+                    },
+                  ]}
+                >
+                  {getCategoryLabel(tx.tag, t)}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Top Dedicated Action Buttons (Visible & Non-intrusive) */}
+          {!isSelectMode && (
+            <View
+              style={[
+                styles.topActionButtonsGroup,
+                isRTL ? { left: 8, flexDirection: 'row' } : { right: 8, flexDirection: 'row-reverse' },
+              ]}
+            >
+              {/* Delete Button */}
+              <TouchableOpacity
+                onPress={() => onDeletePress(tx)}
+                style={[
+                  styles.cardActionBtn,
+                  {
+                    backgroundColor: isDark ? 'rgba(239, 68, 68, 0.22)' : '#FEE2E2',
+                    borderColor: isDark ? 'rgba(248, 113, 113, 0.40)' : '#FCA5A5',
+                  },
+                ]}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+              >
+                <MaterialIcons
+                  name="close"
+                  size={12.5}
+                  color={isDark ? '#F87171' : '#DC2626'}
+                />
+              </TouchableOpacity>
+
+              {/* Edit Button */}
+              <TouchableOpacity
+                onPress={() => onEditPress?.(tx)}
+                style={[
+                  styles.cardActionBtn,
+                  {
+                    backgroundColor: isDark ? 'rgba(59, 130, 246, 0.20)' : '#EFF6FF',
+                    borderColor: isDark ? 'rgba(96, 165, 250, 0.40)' : '#BFDBFE',
+                  },
+                ]}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+              >
+                <MaterialIcons
+                  name="edit"
+                  size={12}
+                  color={isDark ? '#60A5FA' : '#2563EB'}
+                />
+              </TouchableOpacity>
+
+              {/* Quick Receive Button for Pending Incomes */}
+              {isPending && onToggleStatus && (
+                <TouchableOpacity
+                  onPress={() => onToggleStatus(tx)}
+                  style={[
+                    styles.cardActionBtn,
+                    {
+                      backgroundColor: isDark ? 'rgba(16, 185, 129, 0.22)' : '#ECFDF5',
+                      borderColor: isDark ? 'rgba(52, 211, 153, 0.45)' : '#A7F3D0',
+                    },
+                  ]}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                >
+                  <MaterialIcons
+                    name="check"
+                    size={13}
+                    color={isDark ? '#34D399' : '#059669'}
+                  />
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+        </Animated.View>
+      </TouchableOpacity>
+    </Animated.View>
   );
 };
 
@@ -342,16 +469,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  deleteTxBtn: {
+  topActionButtonsGroup: {
     position: 'absolute',
     top: 7,
+    alignItems: 'center',
+    gap: 6,
+    zIndex: 10,
+  },
+  cardActionBtn: {
     width: 22,
     height: 22,
     borderRadius: 11,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 10,
+  },
+  deleteTxBtn: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   txMainGroup: {
     flex: 1,
@@ -360,6 +499,9 @@ const styles = StyleSheet.create({
   titleRow: {
     alignItems: 'center',
     marginBottom: 4,
+  },
+  timeRow: {
+    alignItems: 'center',
   },
   categoryDot: {
     width: 8,
@@ -384,11 +526,18 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginBottom: 4,
   },
+  badgesRow: {
+    alignItems: 'center',
+    gap: 5,
+  },
   tagContainer: {
-    paddingHorizontal: 9,
-    paddingVertical: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
     borderRadius: 9999,
     borderWidth: 1,
+  },
+  pendingBadge: {
+    alignItems: 'center',
   },
   tagText: {
     fontSize: 10.5,

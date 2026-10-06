@@ -9,6 +9,7 @@ export interface Transaction {
   amount: string; // e.g. "45.00 د.ت"
   tag: string;
   type: 'income' | 'expense';
+  status?: 'received' | 'pending'; // 'received' = received (default), 'pending' = not received yet
   icon: string;
   iconColor: string;
   bgColor: string;
@@ -30,7 +31,14 @@ export interface QuickPreset {
 
 interface TransactionsContextType {
   transactions: Transaction[];
-  addTransaction: (title: string, amount: string, type: 'income' | 'expense', category: string, customIcon?: string) => Transaction;
+  addTransaction: (
+    title: string,
+    amount: string,
+    type: 'income' | 'expense',
+    category: string,
+    customIcon?: string,
+    status?: 'received' | 'pending'
+  ) => Transaction;
   updateTransaction: (
     id: string,
     updatedData: {
@@ -39,10 +47,15 @@ interface TransactionsContextType {
       type?: 'income' | 'expense';
       tag?: string;
       customIcon?: string;
+      status?: 'received' | 'pending';
     }
   ) => Transaction | null;
+  toggleTransactionStatus: (id: string) => Transaction | null;
   deleteTransaction: (id: string) => void;
+  deleteMultipleTransactions: (ids: string[]) => void;
+  updateMultipleTransactionsStatus: (ids: string[], status: 'received' | 'pending') => void;
   getBalance: () => number;
+  getPendingIncomeTotal: () => number;
   presets: QuickPreset[];
   addPreset: (preset: Omit<QuickPreset, 'id'>) => Promise<QuickPreset>;
   updatePreset: (id: string, preset: Partial<QuickPreset>) => Promise<void>;
@@ -213,6 +226,7 @@ export const TransactionsProvider = ({ children }: { children: ReactNode }) => {
               ...tx,
               time: formatTransactionTime(tx.time),
               numericAmount: numeric,
+              status: tx.status || (tx.type === 'income' ? 'received' : undefined),
             };
           });
           setTransactions(migrated);
@@ -259,7 +273,8 @@ export const TransactionsProvider = ({ children }: { children: ReactNode }) => {
     amountStr: string,
     type: 'income' | 'expense',
     category: string,
-    customIcon?: string
+    customIcon?: string,
+    status?: 'received' | 'pending'
   ): Transaction => {
     const numericVal = parseFloat(amountStr.replace(/[^0-9.]/g, '')) || 0;
     
@@ -277,6 +292,9 @@ export const TransactionsProvider = ({ children }: { children: ReactNode }) => {
 
     const amountFormatted = `${type === 'income' ? '+ ' : '- '}${numericVal.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} د.ت`;
 
+    const initialStatus: 'received' | 'pending' | undefined =
+      type === 'income' ? (status || 'received') : undefined;
+
     const newTx: Transaction = {
       id: Date.now().toString() + Math.random().toString().slice(2, 6),
       title: title || (type === 'income' ? 'دخل جديد' : 'مصروف جديد'),
@@ -284,6 +302,7 @@ export const TransactionsProvider = ({ children }: { children: ReactNode }) => {
       amount: amountFormatted,
       tag: category,
       type,
+      status: initialStatus,
       icon,
       iconColor,
       bgColor,
@@ -311,6 +330,7 @@ export const TransactionsProvider = ({ children }: { children: ReactNode }) => {
       type?: 'income' | 'expense';
       tag?: string;
       customIcon?: string;
+      status?: 'received' | 'pending';
     }
   ): Transaction | null => {
     let resultTx: Transaction | null = null;
@@ -323,6 +343,9 @@ export const TransactionsProvider = ({ children }: { children: ReactNode }) => {
         const nextAmount = updatedData.numericAmount !== undefined ? updatedData.numericAmount : tx.numericAmount;
         const nextTag = updatedData.tag !== undefined ? updatedData.tag : tx.tag;
         const nextTitle = updatedData.title !== undefined ? updatedData.title : tx.title;
+        const nextStatus = updatedData.status !== undefined
+          ? updatedData.status
+          : (nextType === 'income' ? (tx.status || 'received') : undefined);
 
         const catStyles = getCategoryStyles(nextTag, updatedData.customIcon || tx.icon);
 
@@ -337,6 +360,7 @@ export const TransactionsProvider = ({ children }: { children: ReactNode }) => {
           numericAmount: nextAmount,
           amount: amountFormatted,
           tag: nextTag,
+          status: nextStatus,
           icon: catStyles.icon,
           iconColor: catStyles.iconColor,
           bgColor: catStyles.bgColor,
@@ -344,6 +368,28 @@ export const TransactionsProvider = ({ children }: { children: ReactNode }) => {
           tagBorder: catStyles.tagBorder,
         };
 
+        return resultTx;
+      });
+
+      saveTransactions(updated);
+      return updated;
+    });
+
+    return resultTx;
+  };
+
+  const toggleTransactionStatus = (id: string): Transaction | null => {
+    let resultTx: Transaction | null = null;
+
+    setTransactions((prev) => {
+      const updated = prev.map((tx) => {
+        if (tx.id !== id || tx.type !== 'income') return tx;
+        const currentStatus = tx.status || 'received';
+        const nextStatus: 'received' | 'pending' = currentStatus === 'pending' ? 'received' : 'pending';
+        resultTx = {
+          ...tx,
+          status: nextStatus,
+        };
         return resultTx;
       });
 
@@ -362,13 +408,47 @@ export const TransactionsProvider = ({ children }: { children: ReactNode }) => {
     });
   };
 
+  const deleteMultipleTransactions = (ids: string[]) => {
+    setTransactions((prev) => {
+      const updated = prev.filter((tx) => !ids.includes(tx.id));
+      saveTransactions(updated);
+      return updated;
+    });
+  };
+
+  const updateMultipleTransactionsStatus = (ids: string[], status: 'received' | 'pending') => {
+    setTransactions((prev) => {
+      const updated = prev.map((tx) => {
+        if (!ids.includes(tx.id)) return tx;
+        return {
+          ...tx,
+          status,
+        };
+      });
+      saveTransactions(updated);
+      return updated;
+    });
+  };
+
   const getBalance = () => {
     return transactions.reduce((acc, tx) => {
       if (tx.type === 'income') {
+        if (tx.status === 'pending') {
+          return acc; // Pending incomes not yet received
+        }
         return acc + tx.numericAmount;
       } else {
         return acc - tx.numericAmount;
       }
+    }, 0);
+  };
+
+  const getPendingIncomeTotal = () => {
+    return transactions.reduce((acc, tx) => {
+      if (tx.type === 'income' && tx.status === 'pending') {
+        return acc + tx.numericAmount;
+      }
+      return acc;
     }, 0);
   };
 
@@ -418,8 +498,12 @@ export const TransactionsProvider = ({ children }: { children: ReactNode }) => {
         transactions,
         addTransaction,
         updateTransaction,
+        toggleTransactionStatus,
         deleteTransaction,
+        deleteMultipleTransactions,
+        updateMultipleTransactionsStatus,
         getBalance,
+        getPendingIncomeTotal,
         presets,
         addPreset,
         updatePreset,
