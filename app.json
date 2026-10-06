@@ -2,7 +2,7 @@
   "expo": {
     "name": "stouch",
     "slug": "stouch",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "stouch",
@@ -17,7 +17,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.kmejri.stouch",
-      "versionCode": 4
+      "versionCode": 5
     },
     "web": {
       "output": "static",
